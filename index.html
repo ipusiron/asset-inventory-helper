@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Asset Inventory Helper</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="X-Frame-Options" content="DENY">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none';">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="ソフトウェア資産管理を支援する教育用ツール。完全ローカル処理で安全。">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Asset Inventory Helper</h1>
+    <p>ソフトウェア資産の一覧を整形・可視化し、CSV/JSON形式で保存できます。</p>
+  </header>
+
+  <main>
+    <nav class="tabs" role="tablist" aria-label="機能タブ">
+      <button id="tabFormatBtn" class="tab-btn active" role="tab" aria-selected="true" aria-controls="tab-format">資産リスト整形</button>
+      <button id="tabTipsBtn" class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-tips">資産取得ヒント</button>
+    </nav>
+
+    <section id="tab-format" class="tab-content">
+      <section class="input-section">
+      <h2>ソフトウェア一覧を入力</h2>
+
+      <p style="margin:.25rem 0 .75rem">
+        下のボタンで <strong>入力例サンプル</strong> を読み込めます（Windows / Linux / macOS）。そのまま「整形して表示」を押して動作確認できます。
+      </p>
+
+      <div style="margin-bottom:.75rem">
+        <button id="loadSampleWin" title="winget list などの出力例を読み込む">サンプル: Windows</button>
+        <button id="loadSampleLinux" title="dpkg -l の出力例を読み込む">サンプル: Linux (dpkg)</button>
+        <button id="loadSampleMac" title="brew list --versions の出力例を読み込む">サンプル: macOS (brew)</button>
+      </div>
+
+      <textarea id="rawInput" maxlength="500000" placeholder="ここにアプリ一覧を貼り付けてください（例: winget list, dpkg -l, brew list --versions の結果など）"></textarea>
+
+      <div style="margin-top:.5rem">
+        <button id="processBtn">整形して表示</button>
+      </div>
+
+      </section>
+
+      <section class="output-section">
+      <h2>整形結果</h2>
+      <div id="outputArea"></div>
+
+      <div id="exportBtns" class="hidden" style="margin-top:.75rem">
+        <button id="exportCsv">CSV保存</button>
+        <button id="exportJson">JSON保存</button>
+      </div>
+      </section>
+    </section>
+
+    <section id="tab-tips" class="tab-content hidden" aria-hidden="true">
+      <h2>取得のヒント（各OS）</h2>
+      <p>以下の方法でソフト名とバージョンを取得し、本ツールに貼り付けて整形してください。</p>
+
+      <h3>Windows</h3>
+      <ul>
+        <li>winget: <code class="user-select-all">winget list</code></li>
+      </ul>
+
+      <h3>Linux</h3>
+      <ul>
+        <li>Deb系: <code class="user-select-all">dpkg -l</code></li>
+        <li>RPM系: <code class="user-select-all">rpm -qa</code></li>
+        <li>Flatpak/Snap: <code class="user-select-all">flatpak list</code> / <code class="user-select-all">snap list</code></li>
+      </ul>
+
+      <h3>macOS</h3>
+      <ul>
+        <li>Homebrew: <code class="user-select-all">brew list --versions</code></li>
+        <li>全アプリ: <code class="user-select-all">system_profiler SPApplicationsDataType</code></li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer">
+      🔗 GitHubリポジトリはこちら（ 
+      <a href="https://github.com/ipusiron/asset-inventory-helper" target="_blank" rel="noopener noreferrer">
+        ipusiron/asset-inventory-helper
+      </a> ）
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
