@@ -271,6 +271,10 @@ asset-inventory-helper/
 ├── README.md           # プロジェクト説明書
 ├── CLAUDE.md           # Claude Code向けガイド
 ├── AGENTS.md           # 開発ガイドライン
+├── COMMANDS.md         # コマンド実行例
+├── DEVLOG.md           # 開発ログ
+├── SECURITY.md         # セキュリティガイド
+├── TECHNICAL.md        # 技術仕様書
 ├── LICENSE             # ライセンスファイル
 ├── .gitignore          # Git除外設定
 └── .nojekyll           # GitHub Pages設定
