@@ -1,11 +1,36 @@
 <!--
 ---
-title: Asset Inventory Helper
-category: security-management
-difficulty: 1
-description: A web-based tool to organize and visualize software assets, with CSV/JSON export support. Designed to align with CIS Controls v8 (Control 1 and 2), helping users experience the first step of asset management in security frameworks.
-tags: [asset, inventory, software, cis, security]
-demo: https://ipusiron.github.io/asset-inventory-helper/
+id: day059
+slug: asset-inventory-helper
+
+title: "Asset Inventory Helper"
+
+subtitle_ja: "ソフトウェア資産の棚卸し支援ツール"
+subtitle_en: "Software Asset Inventory Support Tool"
+
+description_ja: "ソフトウェア資産の一覧を整形・可視化し、CSV/JSON形式でエクスポートできるWebツール。CIS Controls v8のControl 1・2に対応した資産管理の第一歩を体験できます。"
+description_en: "A web-based tool to organize and visualize software assets, with CSV/JSON export support. Designed to align with CIS Controls v8 (Control 1 and 2), helping users experience the first step of asset management in security frameworks."
+
+category_ja:
+  - セキュリティ管理
+  - 資産管理
+category_en:
+  - Security Management
+  - Asset Management
+
+difficulty: 2
+
+tags:
+  - asset
+  - inventory
+  - software
+  - cis-controls
+  - security
+
+repo_url: "https://github.com/ipusiron/asset-inventory-helper"
+demo_url: "https://ipusiron.github.io/asset-inventory-helper/"
+
+hub: true
 ---
 -->
 

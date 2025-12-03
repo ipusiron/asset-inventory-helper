@@ -25,6 +25,7 @@ This is a **static web application** for asset inventory management:
   - Uses regex patterns to extract software names and versions
   - Handles various edge cases and formatting inconsistencies
 - **Export functionality** supports CSV and JSON formats with proper escaping
+- **Size limits**: Input capped at 500KB, exports at 10MB, max 5000 entries
 
 ## Code Conventions
 
@@ -33,6 +34,7 @@ This is a **static web application** for asset inventory management:
 - **Security**: Always escape HTML content using the `escapeHtml()` function
 - **File paths**: Keep all paths relative for GitHub Pages compatibility
 - **No external dependencies** - Everything runs client-side without network calls
+- **Commits**: Use Conventional Commits (`feat:`, `fix:`, `docs:`)
 
 ## Testing Approach
 
