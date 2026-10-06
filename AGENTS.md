@@ -16,10 +16,10 @@
 - Indentation: 2 spaces; keep lines short and readable.
 - Filenames: `index.html`, `style.css`, `script.js`; assets under `assets/`.
 - JavaScript: use `const`/`let`, end statements with semicolons, prefer double quotes to match existing code, avoid global leaks.
-- Security: escape user-rendered content (use `escapeHtml`), avoid remote scripts.
+- Security: render user content with textContent, avoid remote scripts and persistent input storage.
 
 ## Testing Guidelines
-- No automated tests. Perform manual checks:
+- Run `npm test` with Node.js 22+; no dependency installation is required. Also perform browser checks:
   - Load samples (Windows/Linux/macOS buttons) → “整形して表示”.
   - Verify table rendering and CSV/JSON export downloads.
   - Smoke-test in Chrome and Edge; confirm layout on narrow screens (viewport set).

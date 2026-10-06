@@ -1,208 +1,111 @@
-# セキュリティ改善履歴
+# セキュリティ対策と限界
 
-## 2024年9月7日 - GitHub Pages公開前のセキュリティ強化
+## ブラウザー内での入力と出力
 
 ### 背景
 
-GitHub Pagesでの公開に先立ち、セキュリティ監査を実施し、以下の改善を行いました。
-静的サイトとはいえ、ユーザーが入力するデータを扱うツールであるため、適切なセキュリティ対策が必要でした。
+入力された一覧はブラウザー内で解析します。
+対策は入力の送信やHTMLとしての実行を避けるためのもので、端末や保存ファイルの安全性を保証するものではありません。
 
 ### 実施したセキュリティ対策
 
 #### 1. Content Security Policy (CSP) の実装
 
-**追加内容:**
-```html
-<meta http-equiv="Content-Security-Policy" content="
-  default-src 'self'; 
-  script-src 'self'; 
-  style-src 'self' 'unsafe-inline'; 
-  img-src 'self' data:; 
-  font-src 'self'; 
-  connect-src 'none'; 
-  frame-src 'none'; 
-  object-src 'none'; 
-  base-uri 'self'; 
-  form-action 'none';
-">
+CSPは同一オリジンのスクリプトとCSSだけを読み込み、接続、フォーム送信、iframe、objectを禁止します。
+インラインのスクリプトとスタイルは許可しません。
+
+```text
+default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:;
+font-src 'self'; connect-src 'none'; frame-src 'none'; object-src 'none';
+base-uri 'none'; form-action 'none';
 ```
 
-**効果:**
-- XSS（クロスサイトスクリプティング）攻撃の防止
-- 外部リソースの不正読み込み防止
-- インラインスクリプトの実行禁止（'unsafe-inline'はスタイルのみ許可）
+CSPは多層対策の1つであり、すべてのXSSを防ぐ保証ではありません。
 
 #### 2. セキュリティヘッダーの追加
 
-**追加したヘッダー:**
-- `X-Content-Type-Options: nosniff` - MIMEタイプのスニッフィング防止
-- `X-Frame-Options: DENY` - クリックジャッキング攻撃防止
-- `Referrer-Policy: no-referrer` - リファラー情報の漏洩防止
+ページにreferrerのmetaを設定し、参照元情報の送信を抑えます。
+X-Frame-Options、X-Content-Type-OptionsはHTTPレスポンスヘッダー専用であり、metaには記載しません。
+CSPのframe-ancestorsもmetaでは無効です。
+このリポジトリの設定だけでフレーム埋め込み拒否を保証することはできません。
+必要な場合はHTTPヘッダーを設定できる配信環境を使用してください。
 
 #### 3. 入力データのサイズ制限
 
-**実装内容:**
-```javascript
-// HTMLレベルでの制限
-<textarea maxlength="500000">
-
-// JavaScriptレベルでの検証
-if (rawText.length > 500000) {
-  alert("入力データが大きすぎます。500,000文字以内にしてください。");
-  return;
-}
-```
-
-**効果:**
-- DoS（サービス拒否）攻撃の防止
-- ブラウザのメモリ枯渇防止
-- 処理パフォーマンスの保証
+解析前に500,000 UTF-16コード単位と10,000物理行を検査します。
+文字数とバイト数は同じではありません。
+入力欄のmaxlengthによる無通知の切り捨ては使わず、超過時は画面にエラーを表示して保存を無効化します。
+貼り付け自体のメモリ使用や、すべての端末での応答時間を保証する制限ではありません。
 
 #### 4. 処理エントリ数の制限
 
-**実装内容:**
-```javascript
-const MAX_ENTRIES = 5000; // 最大エントリ数制限
-
-filtered.forEach((line, index) => {
-  if (parsed.length >= MAX_ENTRIES) {
-    console.warn(`Entry limit reached (${MAX_ENTRIES}). Skipping remaining entries.`);
-    return;
-  }
-  // 処理続行
-});
-```
-
-**効果:**
-- 大量データによるブラウザフリーズ防止
-- メモリ使用量の制限
-- 予測可能なパフォーマンス
+採用結果は5,000件までです。
+Homebrewの複数版を展開した後の件数で判定します。
+超過時は全体エラーとし、最初の5,000件だけを保存することはありません。
+曖昧な行は保留、dpkgの未インストール状態などは除外とし、それぞれ理由と原文を表示します。
 
 #### 5. エクスポートファイルサイズ制限
 
-**実装内容:**
-```javascript
-function downloadFile(filename, content, mime) {
-  // ファイルサイズチェック（10MB制限）
-  if (content.length > 10 * 1024 * 1024) {
-    alert("エクスポートファイルが大きすぎます（10MB制限）。");
-    return;
-  }
-  // ダウンロード処理
-}
-```
+生成したBlobのsizeで10 MiB（10,485,760バイト）以下かを確認します。
+超過時はダウンロードせず、エラーを表示します。
+Blob生成前のメモリ確保まで防ぐものではありません。
 
-**効果:**
-- 巨大ファイル生成によるメモリ枯渇防止
-- ダウンロード処理の安定化
+CSVは全セルを引用符で囲み、内部の引用符を二重化します。
+危険な開始文字にはアポストロフィーを付けます。
+半角と全角の数式開始文字、先行する空白、TAB、CR、LFを検査します。
+表計算ソフトの解釈や再保存によって保護が失われる場合があるため、完全な防止を保証しません。
+原値を保持するJSONも用意しています。
+[OWASP CSV Injection](https://community.owasp.org/attacks/CSV_Injection)を参照してください。
 
 #### 6. 外部リンクのセキュリティ強化
 
-**実装内容:**
-```html
-<a href="https://github.com/..." target="_blank" rel="noopener noreferrer">
-```
-
-**効果:**
-- `noopener` - 新しいウィンドウから元のページへのアクセス防止
-- `noreferrer` - リファラー情報の送信防止
-- タブナビング攻撃の防止
+別タブで開くリンクに`rel="noopener noreferrer"`を指定します。
+公開ページの取得と外部リンクへの移動は通信を伴いますが、アプリは入力一覧をリクエストに含めません。
 
 #### 7. XSS対策の強化
 
-**既存の対策（維持）:**
-```javascript
-function escapeHtml(str) {
-  if (str == null) return "";  // null/undefinedチェック追加
-  
-  return String(str)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-```
-
-**効果:**
-- HTMLインジェクション完全防止
-- null/undefined入力への対応
-- すべての特殊文字を適切にエスケープ
+名前、版、保留理由の原文はtextContentで描画します。
+入力をHTMLとして解釈せず、実行可能な属性やタグを組み立てません。
+制御文字を含む行は保留し、その原文の制御文字を文字コード表記にして表示します。
 
 #### 8. ユーザビリティとセキュリティの両立
 
-**実装内容:**
-```css
-/* コマンドを選択しやすくする */
-code.user-select-all {
-  user-select: all;
-  cursor: pointer;
-}
-
-/* テキストエリアのリサイズ制限 */
-textarea {
-  resize: vertical;
-  max-height: 600px;
-}
-```
-
-**効果:**
-- コマンドのコピーを容易にし、手入力ミスを防ぐ
-- UIの破壊を防ぎつつ、適切な操作性を維持
+入力と形式を変えたときは結果と保存操作を無効化します。
+採用件数だけでなく、保留、除外、見出しの行数も表示します。
+入力を消す操作は保存済みファイルを削除しません。
 
 ### セキュリティ設計の原則
 
-本ツールは以下の原則に基づいて設計されています：
-
-1. **最小権限の原則** - 必要最小限の機能のみを実装
-2. **ゼロトラスト** - すべての入力を信頼せず検証
-3. **深層防護** - 複数層のセキュリティ対策を実装
-4. **フェイルセーフ** - エラー時は安全側に倒れる設計
+- 入力を実行せず、表示用の文字列として扱う。
+- 解析結果と保存データを同じ配列から生成する。
+- 判別できない行を推測で修正しない。
+- エラー時に古い結果を保存させない。
 
 ### 残存リスクと対策
 
-#### 認識している制限事項
-
-1. **クライアントサイドの制限**
-   - すべての処理がブラウザで実行されるため、悪意のあるユーザーが制限を回避する可能性
-   - 対策：重要なデータを扱わない、教育目的での使用を推奨
-
-2. **CSPの'unsafe-inline'**
-   - スタイルに'unsafe-inline'を許可（インラインスタイルのため）
-   - 対策：将来的に外部CSSファイルへの完全移行を検討
-
-3. **正規表現のパフォーマンス**
-   - 複雑な入力でReDoS（正規表現DoS）の可能性
-   - 対策：入力サイズ制限で影響を最小化
+端末の拡張機能、画面の共有、OSのクリップボード履歴などは本ツールの制御対象外です。
+ブラウザーの開発者機能で処理を変更することも可能であり、生成物は正しさや改ざんの有無を証明しません。
+自動判定は限定された構文の認識であり、入力内容の意味や収集元の完全性を保証しません。
 
 ### プライバシーへの配慮
 
-- **データ収集なし** - Google Analyticsなどの追跡ツール未使用
-- **外部通信なし** - すべての処理をローカルで実行
-- **データ保存なし** - ブラウザをリロードするとすべて消去
-- **Cookie未使用** - トラッキングクッキーなし
+入力や結果をlocalStorage、Cookie、URLへ保存しません。
+解析や追跡のための外部サービスを使いません。
+入力は画面とメモリに残るため、利用後はクリアしてください。
+ブラウザーの履歴復元や保存済みファイルの消去は利用者側で管理してください。
 
 ### セキュリティ報告
 
-セキュリティ上の問題を発見した場合は、以下の方法で報告してください：
-
-1. GitHubのIssueで報告（機密性が低い場合）
-2. 詳細な脆弱性報告は、READMEに記載の連絡先へ
+公開して差し支えない再現手順は、リポジトリのIssueで報告してください。
+実際の資産一覧、個人情報、認証情報は公開Issueへ貼り付けないでください。
 
 ### 今後の改善予定
 
-- [ ] CSPの'unsafe-inline'を除去（すべてのスタイルを外部化）
-- [ ] Web Workerを使用した処理の分離
-- [ ] SubResource Integrity (SRI) の実装（CDN使用時）
-- [ ] より高度な入力検証ロジック
-- [ ] セキュリティテストの自動化
+CSVの表計算ソフトごとの挙動と、各OSの実際の取得結果を継続して確認する必要があります。
+外部サービスへの送信や依存ライブラリーの追加を前提とするものではありません。
 
 ### 参考資料
 
 - [OWASP Top 10](https://owasp.org/www-project-top-ten/)
 - [Content Security Policy (CSP)](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP)
 - [GitHub Pages セキュリティベストプラクティス](https://docs.github.com/en/pages/getting-started-with-github-pages/about-github-pages#limits-on-use-of-github-pages)
-
----
-
-*最終更新: 2024年9月7日*

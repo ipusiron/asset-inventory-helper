@@ -2,6 +2,11 @@
 
 このドキュメントでは、各OS環境でソフトウェア資産情報を取得するための詳細なコマンドを記載しています。
 
+直接貼り付けられるのは、名前とバージョンの2列、見出しつきwinget、dpkg、Homebrewです。
+ハードウェア、クラウド、ネットワークなどの取得例は資産管理一般の参考であり、その出力の解析には対応していません。
+このページがコマンドを実行することはありません。
+公式資料と構文は確認していますが、すべてのOSで実際の収集結果を検証したものではありません。
+
 ---
 
 ## 📋 目次
@@ -27,7 +32,8 @@ winget list
 
 #### レジストリから取得（推奨）
 
-`winget list` は環境によって JSON が混ざる／拾えないアプリがある等の課題があるため、**レジストリの Uninstall キー** から取得する方法を推奨します。
+Uninstallキーから登録された名前と版を取得できます。
+この方法だけでポータブルアプリなどを網羅できるわけではありません。
 
 **一覧表示（名前・バージョン）:**
 ```powershell
@@ -71,22 +77,28 @@ Get-ItemProperty -Path $paths -ErrorAction SilentlyContinue |
   Sort-Object Name
 ```
 
-#### wingetのJSON出力を整形
+#### 貼り付け用の2列を生成
 
 ```powershell
-# Name, Version のみ抽出
-winget list --output json | ConvertFrom-Json | % Installed | Select-Object Name, Version
-
-# 貼り付け向け（スペース区切り）
-winget list --output json | ConvertFrom-Json | % Installed | % { "{0} {1}" -f $_.Name, $_.Version }
+# 上の例の$pathsを使い、名前と版をTAB1個で区切る
+Get-ItemProperty -Path $paths -ErrorAction SilentlyContinue |
+  Where-Object { $_.DisplayName } |
+  ForEach-Object { "{0}`t{1}" -f $_.DisplayName, $_.DisplayVersion }
 ```
 
 ### 注意事項
 
-- 管理者権限の PowerShell を推奨（HKLM 配下へ確実にアクセスするため）
-- 32bit/64bit の双方（WOW6432Node を含む）と HKCU を参照して重複を最小化
+- 権限が必要な箇所だけ環境の管理方針に従って実行する。一覧取得のための一律の管理者起動は不要
+- HKLMの32bit/64bit登録と実行ユーザーのHKCUを参照する。他ユーザーを網羅するものではなく、重複もあり得る
 - Win32_Product は MSI の再構成をトリガーするため使用しない
-- 出力は本ツールに貼り付けて整形・可視化できます
+- 貼り付け用2列または見出しつきwinget表を入力し、保留と除外の行も確認する
+
+CSVファイルの直接入力には対応していません。
+`winget list`は英語または日本語の見出しつき表を貼り付けます。
+更新候補ではなくVersion列を採用します。
+[Microsoftのlistコマンドの説明](https://learn.microsoft.com/en-ca/windows/package-manager/winget/list)を参照してください。
+Win32_Productの列挙ではMSIの整合性確認と修復が起きるため、一覧取得の案内には使いません。
+[Microsoftの説明](https://devblogs.microsoft.com/scripting/use-powershell-to-find-installed-software/)を参照してください。
 
 ---
 
@@ -98,8 +110,8 @@ winget list --output json | ConvertFrom-Json | % Installed | % { "{0} {1}" -f $_
 # 基本
 dpkg -l
 
-# 名前とバージョンのみ
-dpkg-query -W -f='${Package} ${Version}\n'
+# 名前と版のみ（未インストールの状態も含まれ得るため状態確認が必要）
+dpkg-query -W -f='${Package}\t${Version}\n'
 
 # インストール済みパッケージのみ（推奨）
 dpkg -l | grep "^ii"
@@ -108,17 +120,20 @@ dpkg -l | grep "^ii"
 ### RedHat/CentOS/Fedora系
 
 ```bash
-# 基本
+# 一覧確認用（この出力の直接解析には未対応）
 rpm -qa
 
 # 名前とバージョンを整形
-rpm -qa --qf "%{NAME} %{VERSION}-%{RELEASE}\n"
+rpm -qa --qf '%{NAME}\t%{VERSION}-%{RELEASE}\n'
 
 # ソート済み
 rpm -qa | sort
 ```
 
 ### 汎用パッケージ管理
+
+以下は参考の取得例です。
+直接解析せず、必要な名前と版をTAB区切りの2列へ整理してください。
 
 ```bash
 # Flatpak
@@ -158,6 +173,10 @@ npm list --depth=0
 
 ### Homebrew
 
+「Homebrew」を選ぶか、先頭に`brew list --versions`のコマンド行を含めます。
+複数版は別レコードとして保持します。
+`--verbose`はパス一覧であり、本ツールの解析対象ではありません。
+
 ```bash
 # 基本（バージョン付き）
 brew list --versions
@@ -170,6 +189,8 @@ brew list --cask --versions
 ```
 
 ### システムアプリケーション
+
+以下の出力は本ツールの解析対象外です。
 
 ```bash
 # すべてのアプリケーション
@@ -405,4 +426,4 @@ Cloud,EC2,t3.medium,us-east-1,2024-09-07,WebServer
 
 ---
 
-*最終更新: 2024年9月7日*
+関連資料：[dpkg-query](https://manpages.debian.org/jessie/dpkg/dpkg-query.1.en.html)、[RPMの出力形式](https://rpm.org/docs/4.20.x/manual/queryformat.html)、[Homebrew](https://docs.brew.sh/Manpage)。
