@@ -34,6 +34,8 @@ hub: true
 ---
 -->
 
+[English](README.en.md) · 日本語
+
 # Asset Inventory Helper - ソフトウェア資産の棚卸し支援
 
 ![GitHub Repo stars](https://img.shields.io/github/stars/ipusiron/asset-inventory-helper?style=social)
@@ -47,6 +49,8 @@ hub: true
 Asset Inventory Helperは、取得済みのソフトウェア一覧を整形するWebツールです。
 名前とバージョンを確認し、判別できない行を保留して、採用したデータをCSV/JSONで保存できます。
 端末やネットワークを自動調査する機能はありません。
+
+画面とスクリーンショットは現在日本語です。英語の説明はREADME.en.mdに用意しています。
 
 ---
 
@@ -267,7 +271,8 @@ asset-inventory-helper/
 ├── package.json          # 依存なしのテスト設定
 ├── test/                 # Node標準テスト
 │   ├── core.test.js       # 解析と出力の検証
-│   └── readme.test.js     # 文書とHTMLの検証
+│   ├── readme.test.js     # 文書とHTMLの検証
+│   └── readme-en.test.js  # 日英READMEの整合性
 ├── .github/              # GitHub設定
 │   └── workflows/        # 自動テスト
 │       └── test.yml       # Node.js 22のテスト
@@ -275,6 +280,7 @@ asset-inventory-helper/
 ├── assets/               # 画像・静的ファイル
 │   └── screenshot.png    # スクリーンショット
 ├── README.md             # プロジェクト説明書
+├── README.en.md          # 英語の説明
 ├── CLAUDE.md             # Claude Code向けガイド
 ├── AGENTS.md             # 開発ガイドライン
 ├── COMMANDS.md           # コマンド実行例
