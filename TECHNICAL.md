@@ -20,427 +20,109 @@
 
 ## アーキテクチャ概要
 
-### 設計思想
+ブラウザー内で入力を解析し、採用データを表とCSV/JSONへ渡します。
+ビルドや追加ライブラリーは不要です。
 
-```
-[入力] → [前処理] → [パース] → [正規化] → [表示] → [エクスポート]
-   ↑                                              ↓
-   └──────────── ユーザーインタラクション ──────────┘
-```
+| ファイル | 役割 |
+|---|---|
+| inventory-core.js | 解析と出力。DOMに依存しない純粋関数 |
+| inventory-messages.js | 動的メッセージ |
+| script.js | 入力変更、描画、ダウンロード |
+| index.html / style.css | 画面構造と表示 |
 
-**クライアントサイド完結型アーキテクチャ**
-- サーバー不要の静的サイト
-- すべての処理をブラウザ内で実行
-- 外部依存なし（ライブラリ未使用）
-
----
+coreはclassic scriptとCommonJSで共用し、file://とNode標準テストの両方で動作します。
 
 ## コアアルゴリズム
 
-### 1. 汎用パーサーアルゴリズム
+### 入力形式の選択
 
-```javascript
-// 基本的なパース戦略
-function parseStrategy(line) {
-  // Step 1: 既知のフォーマットを検出
-  if (isDpkgFormat(line)) return parseDpkg(line);
-  if (isWingetFormat(line)) return parseWinget(line);
-  
-  // Step 2: 汎用ヒューリスティック
-  return parseGeneric(line);
-}
-```
+`parseInventory(input, format)`にauto、columns、winget、dpkg、brewを指定します。
+autoは見出しやコマンド行を優先し、複数形式の根拠があれば全行を保留します。
+見出しがなくても全非空行がdpkgの構文に一致する場合はdpkgとし、それ以外は2列形式を使います。
+自動判定は入力の意味を保証するものではありません。
 
-#### アルゴリズムの核心
+### 解析結果
 
-```javascript
-// フォーマットが色々あるため、いくつかの簡易パターンで抽出
-filtered.forEach((line, index) => {
-  const l = line.trim();
-  
-  // パターン1: dpkg -l 形式の検出
-  // "ii  package-name  1.2.3  arch  description"
-  if (/^[a-z][a-z]\s+/.test(l)) {
-    const parts = l.split(/\s+/);
-    if (parts.length >= 3) {
-      parsed.push({ 
-        name: parts[1],      // 2番目の要素が名前
-        version: parts[2]    // 3番目の要素がバージョン
-      });
-      return;
-    }
-  }
-  
-  // パターン2: 汎用バージョン検出
-  // 右側から数字を含むトークンを探す
-  const parts = l.split(/\s+/);
-  if (parts.length >= 2) {
-    let versionIndex = -1;
-    // 逆順探索で最初の数字含有トークンを見つける
-    for (let i = parts.length - 1; i >= 1; i--) {
-      if (/\d/.test(parts[i])) {
-        versionIndex = i;
-        break;
-      }
-    }
-    // バージョンが見つかった場合の処理
-    if (versionIndex > 0) {
-      // 名前部分の抽出（IDっぽいトークンを除外）
-      let nameTokens = parts.slice(0, versionIndex);
-      const isIdLike = (tok) => /[\\/,:]/.test(tok) || /[A-Za-z]\.[A-Za-z]/.test(tok);
-      const cutAt = nameTokens.findIndex(isIdLike);
-      if (cutAt !== -1) {
-        nameTokens = nameTokens.slice(0, cutAt);
-      }
-      parsed.push({
-        name: nameTokens.join(" ").trim(),
-        version: parts[versionIndex]
-      });
-    }
-  }
-});
-```
-
-### 2. ヒューリスティックによるバージョン検出
-
-**設計判断：なぜ右側から探索するのか？**
-
-```javascript
-// 多くのパッケージマネージャーの出力形式を分析した結果：
-// name [id] [path] version [arch] [description]
-//                     ↑ ここが通常バージョン
-
-// 実装
-for (let i = parts.length - 1; i >= 1; i--) {
-  if (/\d/.test(parts[i])) {  // 数字を含む = バージョンの可能性
-    versionIndex = i;
-    break;
-  }
-}
-```
-
-このアプローチにより、以下の形式すべてに対応：
-- `git 2.46.0` (brew形式)
-- `Git Git.Git 2.46.0` (winget形式 - IDカラムあり)
-- `bash 5.2.21-2ubuntu4 amd64` (dpkg形式)
-
-### 3. ノイズ除去アルゴリズム
-
-```javascript
-// ヘッダー行や区切り線の自動除去
-const filtered = lines.filter(line => {
-  const l = line.trim();
-  return !(
-    l.startsWith("Desired=") ||      // dpkgヘッダー
-    l.startsWith("| Status=") ||     // dpkgヘッダー
-    l.startsWith("||/") ||            // dpkgヘッダー
-    /^[-=]{3,}$/.test(l) ||          // 区切り線
-    l.toLowerCase().startsWith("name") ||  // カラムヘッダー
-    l.toLowerCase().startsWith("winget list") ||  // コマンド自体
-    l.toLowerCase().startsWith("brew list")       // コマンド自体
-  );
-});
-```
-
----
+戻り値は`{ format, entries, lines, error }`です。
+entriesには採用したname、version、元の行番号を入れます。
+linesには非空行の原文、行番号、状態、理由のキーを入れます。
+状態はaccepted、held、excluded、ignoredです。
+画面は理由のキーから辞書の文言を表示します。
 
 ## パース処理の詳細
 
-### 段階的フィルタリング戦略
+| 形式 | 規則 |
+|---|---|
+| columns | TAB1個または2個以上の半角空白で2列。単一空白は名前1語と数字から始まる版のみ |
+| winget | 英語／日本語のName・Id・Version見出しを必須とし、3列目を採用。更新候補は不採用 |
+| dpkg | 状態文字を解析し、現在状態installedかつエラーなしを採用。hold状態でもinstalledなら採用 |
+| brew | 名前1語と版1個以上。複数版を別レコードへ展開 |
 
-```
-入力テキスト
-    ↓
-[Stage 1: 行分割]
-    ↓
-[Stage 2: 空行除去]
-    ↓
-[Stage 3: ヘッダー除去]
-    ↓
-[Stage 4: フォーマット別パース]
-    ↓
-[Stage 5: データ正規化]
-    ↓
-構造化データ
-```
-
-### 各OSフォーマットへの対応
-
-#### Windows (winget)
-```
-Name                Id                     Version
-----------------------------------------
-7-Zip               7zip.7zip              24.06
-```
-
-#### Linux (dpkg)
-```
-ii  bash  5.2.21-2ubuntu4  amd64  GNU Bourne Again SHell
-```
-
-#### macOS (brew)
-```
-git 2.46.0
-node 22.6.0
-```
-
----
+名前と版の前後の空白は除去しますが、文字の正規化や重複削除はしません。
+2列形式の空バージョンは、名前の後ろにTABを残して明示します。
+名前だけ、余分な列、省略記号、制御文字などは保留して原文を残します。
+一般的なCSV/JSONや、通常のrpm -qa出力を推測で分解する機能はありません。
 
 ## プログラミングテクニック
 
-### 1. 正規表現の効率的使用
+### DOMの生成
 
-```javascript
-// コンパイル済み正規表現を使わず、シンプルなテストを優先
-if (/^[a-z][a-z]\s+/.test(l)) {  // dpkg形式の高速判定
-  // 詳細なパースは必要な場合のみ
-}
+採用表と保留の詳細はcreateElementとtextContentで構築します。
+入力をHTMLとして解釈しません。
+保留原文の制御文字は文字コード表記に置き換え、内容が表示順へ影響することを避けます。
 
-// 複雑な正規表現を避ける
-// NG: /^([a-z]{2})\s+(\S+)\s+([\d\.\-\w]+)\s+(\w+)\s+(.*)$/
-// OK: シンプルなsplit()とindexOf()の組み合わせ
-```
+### 入力状態の管理
 
-### 2. 防御的プログラミング
+入力、形式変更、見本読込、クリアは同じinvalidate処理を呼びます。
+保存用の参照を破棄し、表と保留欄を空にし、保存ボタンを隠してdisabledにします。
+整形ボタンも最初にinvalidateし、エラー時に前の結果を残しません。
 
-```javascript
-// Null安全なアクセス
-const cells = tr.querySelectorAll("td");
-return {
-  name: cells[0]?.innerText ?? "",     // Optional chaining + Nullish coalescing
-  version: cells[1]?.innerText ?? ""
-};
+### ファイル生成
 
-// エスケープ関数の堅牢性
-function escapeHtml(str) {
-  if (str == null) return "";  // null/undefined対策
-  return String(str)           // 強制文字列変換
-    .replaceAll("&", "&amp;")  // 順序重要：&を最初に
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-```
-
-### 3. メモリ効率を考慮した実装
-
-```javascript
-// ストリーミング的な処理（一度に全データを保持しない）
-filtered.forEach((line, index) => {
-  if (parsed.length >= MAX_ENTRIES) {
-    return;  // 早期終了でメモリ節約
-  }
-  // 処理
-});
-
-// DOM操作の最小化
-let html = "<table>";  // 文字列連結でDOM構築
-data.forEach(item => {
-  html += `<tr>...`;
-});
-outputArea.innerHTML = html;  // DOM操作は1回のみ
-```
-
-### 4. イベントハンドリングのベストプラクティス
-
-```javascript
-// グローバル汚染を避ける
-(function() {
-  // すべてのコードをIIFEで包む（実際のコードでは省略）
-  const rawInput = document.getElementById("rawInput");
-  // ...
-})();
-
-// イベントリスナーの適切な設定
-tabFormatBtn?.addEventListener("click", () => activateTab("format"));
-//          ↑ Optional chainingで要素の存在確認
-```
-
-### 5. データ変換の最適化
-
-```javascript
-// CSV生成の効率化
-const rows = Array.from(document.querySelectorAll("table tr"))
-  .map(tr => 
-    Array.from(tr.querySelectorAll("th,td"))
-      .map(td => `"${td.innerText.replace(/"/g, '""')}"`)
-      .join(",")
-  );
-// 一度の変換で完了、中間配列を最小化
-```
-
----
+CSVとJSONは画面のテキストを読み戻さず、entriesから生成します。
+CSVはUTF-8 BOM、CRLF、固定のname/versionヘッダーを使います。
+各セルの引用符を二重化し、危険な開始文字にはアポストロフィーを付けます。
+JSONはname/versionだけを保持し、CSV用の保護文字を加えません。
+ダウンロードはBlobを使い、リンクを除去してから遅延してObject URLを解放します。
 
 ## データフロー
 
-### 入力から出力までの変換
-
-```javascript
-// 1. 生テキスト
-"ii  bash  5.2.21-2ubuntu4  amd64  GNU Bourne Again SHell"
-    ↓
-// 2. トークン配列
-["ii", "bash", "5.2.21-2ubuntu4", "amd64", "GNU", "Bourne", "Again", "SHell"]
-    ↓
-// 3. 構造化オブジェクト
-{ name: "bash", version: "5.2.21-2ubuntu4" }
-    ↓
-// 4. HTMLテーブル
-"<tr><td>bash</td><td>5.2.21-2ubuntu4</td></tr>"
-    ↓
-// 5. エクスポート形式
-CSV: "bash","5.2.21-2ubuntu4"
-JSON: {"name":"bash","version":"5.2.21-2ubuntu4"}
-```
-
----
+1. 入力の型、形式指定、長さ、物理行数を検査する。
+2. 形式を決めて非空行を解析し、採用、保留、除外、見出しに分ける。
+3. 採用結果が上限以内なら、件数と表、保留の詳細を表示する。
+4. 保存操作では採用データをCSV/JSONへ変換する。
+5. Blobのバイト数を確認してダウンロードする。
 
 ## パフォーマンス最適化
 
-### 1. 遅延評価
-
-```javascript
-// 必要になるまで処理しない
-if (!rawText) {
-  alert("テキストを入力してください。");
-  return;  // 早期リターン
-}
-```
-
-### 2. 処理の分割
-
-```javascript
-// 巨大データセットの処理制限
-const MAX_ENTRIES = 5000;
-// 一度に処理する量を制限してUIのフリーズを防ぐ
-```
-
-### 3. DOM操作の最適化
-
-```javascript
-// NG: 個別にDOM操作
-data.forEach(item => {
-  const tr = document.createElement('tr');
-  outputArea.appendChild(tr);  // 毎回リフロー発生
-});
-
-// OK: バッチ処理
-let html = '';
-data.forEach(item => {
-  html += `<tr>...`;
-});
-outputArea.innerHTML = html;  // リフローは1回のみ
-```
-
----
+入力は500,000 UTF-16コード単位、10,000物理行、採用結果は5,000件までです。
+配列に保持して処理するため、ストリーミング処理ではありません。
+上限は負荷を抑えるためのもので、あらゆる端末での応答時間や大量貼り付け時のメモリ使用量を保証しません。
 
 ## エラーハンドリング
 
-### 段階的なエラー処理
+型や形式の不正、空入力、上限超過はerrorキーを返します。
+採用上限を超えた場合もentriesを空にし、一部だけを保存させません。
+行単位の保留は理由と原文を表示し、採用できた行だけを保存できます。
+0件のときは保存ボタンを表示しません。
 
-```javascript
-// Level 1: 入力検証
-if (!rawText) {
-  alert("テキストを入力してください。");
-  return;
-}
-
-// Level 2: サイズ検証
-if (rawText.length > 500000) {
-  alert("入力データが大きすぎます。");
-  return;
-}
-
-// Level 3: パース中のエラー
-if (parsed.length >= MAX_ENTRIES) {
-  console.warn(`Entry limit reached`);  // 警告のみ、処理は継続
-}
-
-// Level 4: エクスポート時のエラー
-if (content.length > 10 * 1024 * 1024) {
-  alert("ファイルが大きすぎます。");
-  return;
-}
-```
-
----
+保存サイズはBlob.sizeで10 MiB（10,485,760バイト）までです。
+保存処理の例外も画面の状態欄に表示します。
 
 ## 技術的な選択と理由
 
-### なぜVanilla JavaScriptなのか？
-
-1. **依存関係ゼロ** - セキュリティリスクの最小化
-2. **高速起動** - ライブラリのロード時間なし
-3. **教育的価値** - 基礎技術の理解促進
-4. **保守性** - 将来的な互換性問題なし
-
-### なぜ正規表現を最小限にするのか？
-
-1. **ReDoS回避** - 正規表現DoS攻撃のリスク軽減
-2. **可読性** - シンプルな文字列操作の方が理解しやすい
-3. **パフォーマンス** - 単純な文字列操作の方が高速な場合が多い
-
-### なぜサーバーサイド処理を使わないのか？
-
-1. **プライバシー** - データが外部に送信されない
-2. **可用性** - サーバーダウンの影響を受けない
-3. **コスト** - サーバー運用コストゼロ
-4. **レスポンス** - ネットワーク遅延なし
-
----
+Vanilla JavaScriptとNode標準テストを使い、依存のインストールやビルドを不要にしています。
+DOM非依存の解析を分離することで、ブラウザーを起動しなくても既知入力と出力を検査できます。
+入力の永続保存や外部送信を設けず、収集元の確認は利用者が行います。
 
 ## 改善の余地
 
-### アルゴリズムの改善案
-
-```javascript
-// 将来的な実装案：パーサーファクトリーパターン
-class ParserFactory {
-  static create(format) {
-    switch(format) {
-      case 'dpkg': return new DpkgParser();
-      case 'winget': return new WingetParser();
-      case 'brew': return new BrewParser();
-      default: return new GenericParser();
-    }
-  }
-}
-
-// 形式の自動検出
-function detectFormat(text) {
-  if (text.includes('Desired=')) return 'dpkg';
-  if (text.includes('winget')) return 'winget';
-  if (text.includes('brew')) return 'brew';
-  return 'generic';
-}
-```
-
-### パフォーマンスの改善案
-
-```javascript
-// Web Worker活用案
-const worker = new Worker('parser-worker.js');
-worker.postMessage({ command: 'parse', data: rawText });
-worker.onmessage = (e) => {
-  renderTable(e.data);
-};
-```
-
----
+日英切り替え、差分比較、検索などは別の段階で検討します。
+形式を増やす場合は、対応する見本、保留条件、文書、回帰テストを同時に更新する必要があります。
+CSVの数式対策はすべての表計算ソフトや再保存に共通する保証ではありません。
 
 ## まとめ
 
-Asset Inventory Helperは、シンプルながら実用的なツールとして、以下の技術的特徴を持ちます：
-
-1. **汎用的なパースアルゴリズム** - 複数のフォーマットに対応
-2. **防御的プログラミング** - エラーに強い実装
-3. **パフォーマンス重視** - 効率的なDOM操作とメモリ管理
-4. **セキュリティファースト** - XSS対策とCSP実装
-5. **教育的価値** - 読みやすく理解しやすいコード
-
-これらの技術的選択により、安全で高速、かつ保守しやすいツールを実現しています。
-
----
-
-*最終更新: 2024年9月7日*
+Node.js 22以上で`npm test`を実行できます。
+テストは名前と版の既知結果、曖昧行、上限、CSV、JSON、HTML、READMEの例を検査します。
+HTTPとfile://の両方で、入力から実ダウンロードまでブラウザー確認を行ってください。
