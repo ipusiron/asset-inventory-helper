@@ -60,6 +60,12 @@ Search, difference comparison, automatic deduplication, and unauthorized-softwar
 
 ## 💡 Use cases
 
+Ways of using this tool in particular
+
+- Counting only the real entries, excluding headers and separators (text-to-table classes): formatting the Windows sample (name and version columns) does not count the header line "Name Version" or the "----" separator, and only 6 pieces of software are accepted. It is practice in telling headers, separators and data rows apart in a text table and counting the real data
+- Normalizing the output of three managers into the same two columns (data-normalization classes): Windows (6 entries), Linux dpkg (5) and macOS brew (5) have completely different output shapes, yet all are normalized into a two-column table of name and version. You can confirm, by counts and columns, the mechanism that brings three differently shaped inputs into one common form
+- Confirming that broken or ambiguous rows are held rather than guessed (data-quality classes): a row separated by two or more spaces, like `Google Chrome    120.0`, is accepted, but a row shortened with `…` is held (truncated), and a row with a hidden control character is also held (controlCharacter). You can confirm the data-quality idea of not forcing ambiguous rows into the table but leaving them out with a reason
+
 - Small-organization inventories: format lists collected from individual devices and add device names, administrators, and other fields in a separate register. Names and versions alone do not make a complete asset register.
 - Education and training: compare valid and ambiguous sample lines to learn about misclassification when converting text to tables.
 - PC migration planning: record installed home-PC applications and plan reinstalls. License and settings migration are not included.

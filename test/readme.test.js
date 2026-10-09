@@ -134,3 +134,25 @@ test("primary button normal and hover colors have text contrast >= 4.5", () => {
     assert.ok(1.05 / (luminance(color) + .05) >= 4.5, selector);
   }
 });
+
+test("ユースケースの「このツールならではの使い方」の件数と保留コードを計算部で再計算（日英）", () => {
+  const en = read("README.en.md");
+  const win = ["Name                           Version", "--------------------------------------",
+    "7-Zip                          24.06", "GoogleChrome                   127.0.6533.121",
+    "MicrosoftEdge                  127.0.2651.86", "Notepad++                      8.7.5",
+    "Python                         3.12.5", "VLC                            3.0.21"].join("\n");
+  assert.equal(core.parseInventory(win, "columns").entries.length, 6);
+  const lin = ["||/ Name                 Version           Architecture Description",
+    "ii  bash                 5.2.21-2ubuntu4   amd64        GNU Bourne Again SHell",
+    "ii  coreutils            9.1-1ubuntu2.1    amd64        GNU core utilities",
+    "ii  curl                 8.5.0-2ubuntu10   amd64        command line tool",
+    "ii  git                  1:2.43.0-1ubuntu  amd64        revision control",
+    "ii  openssl              3.0.13-0ubuntu3   amd64        SSL toolkit"].join("\n");
+  assert.equal(core.parseInventory(lin, "dpkg").entries.length, 5);
+  const mac = ["git 2.46.0", "node 22.6.0", "python@3.12 3.12.5", "wget 1.24.5", "ffmpeg 7.0.2"].join("\n");
+  assert.equal(core.parseInventory(mac, "brew").entries.length, 5);
+  const held = core.parseInventory("Google Chrome    120.0\nTruncApp\u2026\nBad\u202EApp    1.0", "columns");
+  assert.deepEqual(held.lines.map(l => l.code), ["accepted", "truncated", "controlCharacter"]);
+  assert.equal(held.entries.length, 1);
+  for (const md of [readme, en]) assert.ok(md.includes("6") && md.includes("5"));
+});
