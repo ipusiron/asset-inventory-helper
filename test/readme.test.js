@@ -86,15 +86,15 @@ test("HTML security, labels and tab relationships", () => {
   }
   assert.match(html, /connect-src 'none'/);
   assert.match(html, /name="referrer" content="no-referrer"/);
-  assert.match(html, /<noscript>/);
-  assert.match(html, /<label for="rawInput">/);
-  assert.match(html, /<label for="inputFormat">/);
+  assert.match(html, /<noscript/);
+  assert.match(html, /<label for="rawInput"/);
+  assert.match(html, /<label for="inputFormat"/);
   assert.equal((html.match(/role="tabpanel"/g) || []).length, 2);
   assert.equal((html.match(/role="tab"/g) || []).length, 2);
   assert.doesNotMatch(html, /maxlength=/);
   assert.match(html, /id="resultStatus"[^>]+role="status"/);
   const sources = [...html.matchAll(/<script src="([^"]+)"/g)].map(m => m[1]);
-  assert.deepEqual(sources, ["inventory-core.js", "inventory-messages.js", "script.js"]);
+  assert.deepEqual(sources, ["inventory-core.js", "inventory-messages.js", "i18n.js", "script.js"]);
   sources.forEach(file => assert.ok(fs.existsSync(path.join(root, file))));
 });
 
@@ -105,7 +105,7 @@ test("core loads as a classic script without a module loader", () => {
 });
 
 test("dynamic messages and DOM safety remain centralized", () => {
-  for (const [, key] of script.matchAll(/\bt\("([A-Za-z]+)"/g)) assert.ok(messages[key], key);
+  for (const [, key] of script.matchAll(/\bt\("([A-Za-z]+)"/g)) assert.ok(messages.ja[key], key);
   assert.doesNotMatch(script, /\.innerHTML|\.outerHTML|document\.write|localStorage|fetch\(/);
   assert.doesNotMatch(script.replace(/\/\/[^\n]*/g, ""), /[\u3040-\u30ff\u4e00-\u9fff]/);
   for (const event of ["input", "change"]) assert.match(script, new RegExp('addEventListener\\("' + event + '"'));

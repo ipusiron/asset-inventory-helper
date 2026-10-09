@@ -1,8 +1,14 @@
 (function() {
   "use strict";
   const core = globalThis.InventoryCore;
-  const messages = globalThis.InventoryMessages;
-  const t = (key, values = {}) => messages[key].replace(/\{(\w+)\}/g, (_, name) => String(values[name]));
+  // 現在の言語の辞書を引く（i18n.js が言語を持つ。無ければ日本語）。
+  const getDict = () => {
+    const m = globalThis.InventoryMessages || {};
+    const lang = (globalThis.I18N && globalThis.I18N.lang) || "ja";
+    return m[lang] || m.ja || {};
+  };
+  const t = (key, values = {}) => String((getDict()[key] != null) ? getDict()[key] : key)
+    .replace(/\{(\w+)\}/g, (_, name) => String(values[name]));
   let currentResult = null;
 
   // ===== サンプル入力 =====
@@ -225,4 +231,12 @@
   }
 
   invalidate("initial");
+
+  // 言語が変わったら、結果が出ていれば作り直して動的な文言も新しい言語にする。
+  if (globalThis.I18N && typeof globalThis.I18N.onChange === "function") {
+    globalThis.I18N.onChange(() => {
+      inputCount.textContent = t("inputCount", { count: rawInput.value.length });
+      if (currentResult) processBtn.click();
+    });
+  }
 })();
